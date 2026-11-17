@@ -27,8 +27,8 @@ uv run -q --no-project --with pypdfium2==5.15.2 python -B -c '
 import pypdfium2
 open("out/pypdfium2.txt", "w", encoding="utf-8").write(pypdfium2.PdfDocument("referat.pdf")[0].get_textpage().get_text_range().replace("\r\n", "\n"))'
 
-echo "digpdf ..."
-uvx -q --from digpdf==0.1.0 digpdf referat.pdf > out/digpdf.html
+echo "digpdf ..."   # altid den nyeste version
+uvx -q digpdf@latest referat.pdf > out/digpdf.html
 
 command -v claude >/dev/null || { echo "Teksterne står i out/. Claude Code er ikke installeret, så Haiku bliver ikke spurgt."; exit 0; }
 
