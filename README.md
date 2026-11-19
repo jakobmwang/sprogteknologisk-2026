@@ -13,20 +13,21 @@ Poster til Sprogteknologisk Konference 2026, 20. november, KU. Jakob Mørup Wang
 
 Alle kører med deres standardindstillinger. LiteParse er bedt om markdown, som på posteren, og Docling, PyMuPDF4LLM og
 LiteParse er i de versioner, posteren brugte.
-Tiden er sekunder fra import til færdig tekst på én CPU-kerne (`taskset -c 0`) af en Intel(R) Core(TM) Ultra 7 155U, med pakker og
-modeller hentet på forhånd.
+Tid er fra import til færdig tekst på én CPU-kerne (`taskset -c 0`) af en Intel(R) Core(TM) Ultra 7 155U, med pakker og modeller hentet
+på forhånd. 1-9 er spørgsmålene herunder: ✅ er rigtigt og ❌ forkert eller ikke besvaret, bedømt af Sonnet ud fra facit.
+De bedste resultater står med fed.
 
-| Parser | Version | Sekunder |
-|---|---|---:|
-| [docling](parser-output/docling.md) | 2.132.0 | 34,8 |
-| [pymupdf4llm](parser-output/pymupdf4llm.md) | 1.28.2 | 1,5 |
-| [liteparse](parser-output/liteparse.md) | 2.15.1 | 1,3 |
-| [pypdfium2](parser-output/pypdfium2.txt) | 5.15.2 | < 0,1 |
-| [digpdf](parser-output/digpdf.html) | 0.2.0 | < 0,1 |
-| [xberg](parser-output/xberg.txt) | 1.3.9 | 0,2 |
-| [markitdown](parser-output/markitdown.md) | 0.1.9 | 0,7 |
-| [marker](parser-output/marker.md) | 2.2.0 | 23,8 |
-| [mineru](parser-output/mineru.md) | 4.2.3 | 20,4 |
+| Parser | Version | Tid | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | Rigtige |
+|---|---|---:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|---:|
+| [docling](parser-output/docling.md) | 2.132.0 | 34,8 s | ✅ | ❌ | ❌ | ✅ | ❌ | ❌ | ✅ | ❌ | ❌ | 3/9 |
+| [pymupdf4llm](parser-output/pymupdf4llm.md) | 1.28.2 | 1,5 s | ❌ | ❌ | ✅ | ❌ | ❌ | ✅ | ✅ | ❌ | ✅ | 4/9 |
+| [liteparse](parser-output/liteparse.md) | 2.15.1 | 1,3 s | ❌ | ❌ | ✅ | ❌ | ✅ | ✅ | ❌ | ❌ | ✅ | 4/9 |
+| [pypdfium2](parser-output/pypdfium2.txt) | 5.15.2 | **< 0,1 s** | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | ❌ | ❌ | ✅ | 6/9 |
+| [digpdf](parser-output/digpdf.html) | 0.2.0 | **< 0,1 s** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | **9/9** |
+| [xberg](parser-output/xberg.txt) | 1.3.9 | 0,2 s | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | ❌ | ✅ | 7/9 |
+| [markitdown](parser-output/markitdown.md) | 0.1.9 | 0,7 s | ✅ | ✅ | ✅ | ❌ | ❌ | ✅ | ❌ | ✅ | ✅ | 6/9 |
+| [marker](parser-output/marker.md) | 2.2.0 | 23,8 s | ❌ | ❌ | ✅ | ✅ | ❌ | ✅ | ❌ | ❌ | ✅ | 4/9 |
+| [mineru](parser-output/mineru.md) | 4.2.3 | 20,4 s | ❌ | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | ❌ | ❌ | 5/9 |
 
 ## Haikus svar
 

@@ -1,6 +1,7 @@
 #!/bin/sh
 # sh run.sh: ni parsere læser referat.pdf med deres standardindstillinger, hver parsers tekst kommer i parser-output/,
-# Haiku får posterens ni spørgsmål om hver tekst, og det hele skrives i README.md. Kræver uv og Claude Code.
+# Haiku får posterens ni spørgsmål om hver tekst, Sonnet bedømmer svarene ud fra facit, og det hele skrives i README.md.
+# Kræver uv og Claude Code.
 set -ef
 cd "$(dirname "$0")"
 command -v claude >/dev/null || { echo "run.sh kræver Claude Code (claude)."; exit 1; }
@@ -9,7 +10,8 @@ tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
 export TMPDIR="$tmp"
 
 # parse FIL PAKKER KODE: KODE er Python, der læser referat.pdf og skriver parser-output/FIL. Første kørsel henter pakker
-# og modeller. Anden kørsel er låst til én CPU-kerne, og dens tid fra import til færdig tekst kommer i README.
+# og modeller. Anden kørsel er låst til én CPU-kerne, og dens tid fra import til færdig tekst, i tiendedele sekund (0 er
+# under 0,1 s), kommer i README.
 parse() {
   echo "${1%.*} ..."
   with=""; for p in $2; do with="$with --with $p"; done
@@ -18,8 +20,7 @@ parse() {
 $3
 s = time.perf_counter() - t
 from importlib.metadata import version
-s = '< 0,1' if s < 0.1 else ('%.1f' % s).replace('.', ',')
-open('$tmp/tid.$1', 'w').write('%s %s\n' % (version('$(echo "$2" | sed 's/[^a-z0-9-].*//')'), s))" >"$tmp/log" 2>&1 ||
+open('$tmp/tid.$1', 'w').write('%s %d\n' % (version('$(echo "$2" | sed 's/[^a-z0-9-].*//')'), 0 if s < 0.1 else round(s * 10)))" >"$tmp/log" 2>&1 ||
     { tail -5 "$tmp/log"; exit 1; }
 }
 
@@ -76,17 +77,30 @@ subprocess.run(["mineru-kit", "parse", "referat.pdf", "-o", out], check=True)
 shutil.copy(out + "/referat.md", "parser-output/mineru.md")'
 
 # Haiku som på posteren: uden værktøjer, i en tom mappe, ét spørgsmål pr. kørsel, her én kørsel pr. spørgsmål og tekst.
+# Sonnet bedømmer bagefter hvert svar ud fra facit: ✅ er rigtigt, ❌ er forkert eller ikke besvaret.
 mkdir "$tmp/tom"
+claude_p() { (cd "$tmp/tom" && claude -p "$2" --model "$1" --tools "" --safe-mode --strict-mcp-config < /dev/null); }
 ask() {  # NR SPØRGSMÅL FIL
-  prompt="Herunder står teksten fra et PDF-dokument. Undersøg ikke noget, og brug ingen værktøjer. Svar med det samme og kun ud fra teksten. Kan spørgsmålet ikke besvares ud fra teksten, så skriv »kan ikke afgøres«.
+  claude_p haiku "Herunder står teksten fra et PDF-dokument. Undersøg ikke noget, og brug ingen værktøjer. Svar med det samme og kun ud fra teksten. Kan spørgsmålet ikke besvares ud fra teksten, så skriv »kan ikke afgøres«.
 
 Svar med ét kort svar: $2
 
 --- TEKST ---
 $(cat "parser-output/$3")
---- SLUT ---"
-  (cd "$tmp/tom" && claude -p "$prompt" --model haiku --tools "" --safe-mode --strict-mcp-config < /dev/null) |
-    tr '\n' ' ' | sed 's/|/\\|/g; s/ *$//' > "$tmp/svar.$1.$3"
+--- SLUT ---" | tr '\n' ' ' | sed 's/|/\\|/g; s/ *$//' > "$tmp/svar.$1.$3"
+}
+judge() {  # NR SPØRGSMÅL FACIT FIL. Op til tre forsøg, hvis svaret hverken er ja eller nej (fx et fejlet kald).
+  echo "?" > "$tmp/dom.$1.$4"
+  for i in 1 2 3; do
+    case $(claude_p sonnet "Spørgsmål: $2
+Facit: $3
+Svar: $(cat "$tmp/svar.$1.$4")
+
+Er svaret rigtigt ifølge facit? Svaret må gerne sige mere end facit, men det er forkert, hvis det mangler facits svar eller siger noget, der strider mod facit. Svar kun ja eller nej." | tr -dc 'a-zA-Z') in
+      [Jj]a) echo ✅ > "$tmp/dom.$1.$4"; return;;
+      [Nn]ej) echo ❌ > "$tmp/dom.$1.$4"; return;;
+    esac
+  done
 }
 filer="docling.md pymupdf4llm.md liteparse.md pypdfium2.txt digpdf.html xberg.txt markitdown.md marker.md mineru.md"
 cat > "$tmp/q" <<'EOF'
@@ -100,12 +114,27 @@ Hvor mange skoler omfatter projektet?|14
 Hvilket år er det første med en bevilling til Trygge Skoleveje, fase 2 i tabel 1?|2027
 Hvilken konference er dokumentet lavet til?|Sprogteknologisk Konference 2026
 EOF
-echo "Haiku ..."
+echo "Haiku og Sonnet ..."
 n=0
 while IFS='|' read -r q facit; do
   n=$((n + 1))
-  for f in $filer; do ask $n "$q" $f & done; wait
+  for f in $filer; do (ask $n "$q" $f; judge $n "$q" "$facit" $f) & done; wait
 done < "$tmp/q"
+
+# Tabellens rækker: tid, antal rigtige, fil, version og de ni domme. Den bedste tid og flest rigtige står med fed.
+for f in $filer; do
+  read -r v t < "$tmp/tid.$f"
+  r=0; d=""
+  for n in 1 2 3 4 5 6 7 8 9; do
+    dom=$(cat "$tmp/dom.$n.$f"); d="$d | $dom"
+    if [ "$dom" = ✅ ]; then r=$((r + 1)); fi
+  done
+  echo "$t $r $f $v$d" >> "$tmp/rows"
+done
+bt=$(sort -k1,1n "$tmp/rows" | head -1 | cut -d' ' -f1)
+br=$(sort -k2,2n "$tmp/rows" | tail -1 | cut -d' ' -f2)
+tid() { if [ "$1" = 0 ]; then echo "< 0,1 s"; else echo "$(($1 / 10)),$(($1 % 10)) s"; fi; }
+fed() { if [ "$1" = "$2" ]; then echo "**$3**"; else echo "$3"; fi; }
 
 # README.md
 {
@@ -126,15 +155,13 @@ Poster til Sprogteknologisk Konference 2026, 20. november, KU. Jakob Mørup Wang
 Alle kører med deres standardindstillinger. LiteParse er bedt om markdown, som på posteren, og Docling, PyMuPDF4LLM og
 LiteParse er i de versioner, posteren brugte.
 EOF
-  printf 'Tiden er sekunder fra import til færdig tekst på én CPU-kerne (`taskset -c 0`) af en%s, med pakker og\nmodeller hentet på forhånd.\n' \
+  printf 'Tid er fra import til færdig tekst på én CPU-kerne (`taskset -c 0`) af en%s, med pakker og modeller hentet\npå forhånd. 1-9 er spørgsmålene herunder: ✅ er rigtigt og ❌ forkert eller ikke besvaret, bedømt af Sonnet ud fra facit.\nDe bedste resultater står med fed.\n\n' \
     "$(grep -m1 'model name' /proc/cpuinfo | sed 's/.*://')"
-  echo
-  echo "| Parser | Version | Sekunder |"
-  echo "|---|---|---:|"
-  for f in $filer; do
-    read -r v s < "$tmp/tid.$f"
-    printf '| [%s](parser-output/%s) | %s | %s |\n' "${f%.*}" "$f" "$v" "$s"
-  done
+  echo "| Parser | Version | Tid | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | Rigtige |"
+  echo "|---|---|---:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|---:|"
+  while read -r t r f v d; do
+    printf '| [%s](parser-output/%s) | %s | %s %s | %s |\n' "${f%.*}" "$f" "$v" "$(fed $t $bt "$(tid $t)")" "$d" "$(fed $r $br "$r/9")"
+  done < "$tmp/rows"
   echo
   echo "## Haikus svar"
   echo
