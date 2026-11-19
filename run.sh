@@ -160,18 +160,26 @@ Poster til Sprogteknologisk Konference 2026, 20. november, KU. Jakob Mørup Wang
 
 - `poster.pdf` er posteren.
 - `referat.pdf` er testdokumentet, et opdigtet mødereferat.
-- `parser-output/` er det, hver parser læser i `referat.pdf`.
-- `run.sh` kører parserne, stiller Haiku spørgsmålene, lader Sonnet bedømme svarene og skriver denne README:
-  `sh run.sh`. Det kræver Linux, [uv](https://docs.astral.sh/uv/) og [Claude Code](https://claude.com/claude-code), og
-  første kørsel henter modeller på flere GB.
+- `parser-output/` er hver parsers output for `referat.pdf`.
+- `run.sh` kører parserne, evaluerer, og genererer denne README.
 
 ## Parserne
 
-Alle kører med deres standardindstillinger. LiteParse og xberg giver ikke markdown som standard, så de er også kørt en
-gang, hvor de er bedt om markdown: rækkerne med (markdown). Sådan kørte LiteParse på posteren, og Docling, PyMuPDF4LLM og
-LiteParse er i de versioner, posteren brugte.
+Alle kører med deres standardindstillinger. LiteParse og xberg giver uformateret tekst som standard, så de er kørt en ekstra
+gang, hvor de er bedt om markdown. På posteren er LiteParse bedt om markdown for at være konsistent med formatet, der anvendes af de refererede benchmarks.
+
+## Evaluering
+
+Hver parsers output er givet til Claude Haiku med ét spørgsmål ad gangen. Claude Sonnet evaluerer hvert svar mod facit
+(LLM-as-a-judge). Spørgsmålene er:
+
 EOF
-  printf 'Tid er fra import til færdig tekst på én CPU-kerne (`taskset -c 0`) af en%s, med pakker og modeller hentet\npå forhånd. 1-9 er spørgsmålene herunder: ✅ er rigtigt og ❌ forkert eller ikke besvaret, bedømt af Sonnet ud fra facit.\nDe bedste resultater står med fed.\n\n' \
+  n=0
+  while IFS='|' read -r q facit; do n=$((n + 1)); echo "$n. $q"; done < "$tmp/q"
+  echo
+  echo "## Resultater"
+  echo
+  printf 'Tid i sekunder er målt fra import til færdigt output på en%s, med pakker og modeller hentet på\nforhånd. Kolonne 1-9 er spørgsmålene: ✅ er et rigtigt svar og ❌ et forkert eller manglende svar. De bedste resultater\nstår med fed.\n\n' \
     "$(grep -m1 'model name' /proc/cpuinfo | sed 's/.*://')"
   echo "| Parser | Version | Tid | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | Rigtige |"
   echo "|---|---|---:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|---:|"
@@ -179,9 +187,9 @@ EOF
     printf '| [%s](parser-output/%s) | %s | %s %s | %s |\n' "$(navn $f)" "$f" "$v" "$(fed $t $bt "$(tid $t)")" "$d" "$(fed $r $br "$r/9")"
   done < "$tmp/rows"
   echo
-  echo "## Haikus svar"
+  echo "## Svar"
   echo
-  echo "Haiku får hver parsers tekst og ét spørgsmål ad gangen og svarer én gang. Posterens tal er 25 svar pr. spørgsmål og tekst."
+  echo "Claude Haiku har svaret én gang på hvert spørgsmål. Posterens tal er 25 svar pr. spørgsmål og parser."
   n=0
   while IFS='|' read -r q facit; do
     n=$((n + 1))

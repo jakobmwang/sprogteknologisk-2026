@@ -4,19 +4,34 @@ Poster til Sprogteknologisk Konference 2026, 20. november, KU. Jakob Mørup Wang
 
 - `poster.pdf` er posteren.
 - `referat.pdf` er testdokumentet, et opdigtet mødereferat.
-- `parser-output/` er det, hver parser læser i `referat.pdf`.
-- `run.sh` kører parserne, stiller Haiku spørgsmålene, lader Sonnet bedømme svarene og skriver denne README:
-  `sh run.sh`. Det kræver Linux, [uv](https://docs.astral.sh/uv/) og [Claude Code](https://claude.com/claude-code), og
-  første kørsel henter modeller på flere GB.
+- `parser-output/` er hver parsers output for `referat.pdf`.
+- `run.sh` kører parserne, evaluerer, og genererer denne README.
 
 ## Parserne
 
-Alle kører med deres standardindstillinger. LiteParse og xberg giver ikke markdown som standard, så de er også kørt en
-gang, hvor de er bedt om markdown: rækkerne med (markdown). Sådan kørte LiteParse på posteren, og Docling, PyMuPDF4LLM og
-LiteParse er i de versioner, posteren brugte.
-Tid er fra import til færdig tekst på én CPU-kerne (`taskset -c 0`) af en Intel(R) Core(TM) Ultra 7 155U, med pakker og modeller hentet
-på forhånd. 1-9 er spørgsmålene herunder: ✅ er rigtigt og ❌ forkert eller ikke besvaret, bedømt af Sonnet ud fra facit.
-De bedste resultater står med fed.
+Alle kører med deres standardindstillinger. LiteParse og xberg giver uformateret tekst som standard, så de er kørt en ekstra
+gang, hvor de er bedt om markdown. På posteren er LiteParse bedt om markdown for at være konsistent med formatet, der anvendes af de refererede benchmarks.
+
+## Evaluering
+
+Hver parsers output er givet til Claude Haiku med ét spørgsmål ad gangen. Claude Sonnet evaluerer hvert svar mod facit
+(LLM-as-a-judge). Spørgsmålene er:
+
+1. Hvor mange personer deltog i mødet?
+2. Hvem deltog? Skriv hvert navn for sig, adskilt af semikolon.
+3. Hvem tog referat?
+4. Hvad tid blev mødet holdt?
+5. I hvilket lokale blev mødet holdt?
+6. Hvornår og hvor er næste møde?
+7. Hvor mange skoler omfatter projektet?
+8. Hvilket år er det første med en bevilling til Trygge Skoleveje, fase 2 i tabel 1?
+9. Hvilken konference er dokumentet lavet til?
+
+## Resultater
+
+Tid i sekunder er målt fra import til færdigt output på en Intel(R) Core(TM) Ultra 7 155U, med pakker og modeller hentet på
+forhånd. Kolonne 1-9 er spørgsmålene: ✅ er et rigtigt svar og ❌ et forkert eller manglende svar. De bedste resultater
+står med fed.
 
 | Parser | Version | Tid | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | Rigtige |
 |---|---|---:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|---:|
@@ -32,9 +47,9 @@ De bedste resultater står med fed.
 | [marker](parser-output/marker.md) | 2.2.0 | 23,8 s | ❌ | ❌ | ✅ | ✅ | ❌ | ✅ | ❌ | ❌ | ✅ | 4/9 |
 | [mineru](parser-output/mineru.md) | 4.2.3 | 20,4 s | ❌ | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | ❌ | ❌ | 5/9 |
 
-## Haikus svar
+## Svar
 
-Haiku får hver parsers tekst og ét spørgsmål ad gangen og svarer én gang. Posterens tal er 25 svar pr. spørgsmål og tekst.
+Claude Haiku har svaret én gang på hvert spørgsmål. Posterens tal er 25 svar pr. spørgsmål og parser.
 
 ### 1. Hvor mange personer deltog i mødet?
 
