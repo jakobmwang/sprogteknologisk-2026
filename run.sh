@@ -25,7 +25,8 @@ open('$tmp/tid.$1', 'w').write('%s %d\n' % (version('$(echo "$2" | sed 's/[^a-z0
 }
 
 # Docling, PyMuPDF4LLM og LiteParse i de versioner, posteren brugte. easyocr ved siden af Docling, ellers kører Docling
-# 2.132.0 uden OCR. LiteParse er bedt om markdown, som på posteren.
+# 2.132.0 uden OCR. LiteParse og xberg giver ikke markdown som standard, så de kører også en gang, hvor de er bedt om
+# markdown, LiteParse som på posteren.
 parse docling.md "docling==2.132.0 easyocr" '
 from docling.document_converter import DocumentConverter
 doc = DocumentConverter().convert("referat.pdf", raises_on_error=False).document
@@ -36,10 +37,15 @@ import pymupdf4llm
 text = pymupdf4llm.to_markdown("referat.pdf", page_chunks=True)[0]["text"]
 open("parser-output/pymupdf4llm.md", "w", encoding="utf-8").write(text.strip("\n") + "\n")'
 
-parse liteparse.md "liteparse==2.15.1" '
+parse liteparse.txt "liteparse==2.15.1" '
+from liteparse import LiteParse
+text = LiteParse().parse("referat.pdf").pages[0].text or ""
+open("parser-output/liteparse.txt", "w", encoding="utf-8").write(text.strip("\n") + "\n")'
+
+parse liteparse-markdown.md "liteparse==2.15.1" '
 from liteparse import LiteParse
 text = LiteParse(output_format="markdown").parse("referat.pdf").pages[0].markdown or ""
-open("parser-output/liteparse.md", "w", encoding="utf-8").write(text.strip("\n") + "\n")'
+open("parser-output/liteparse-markdown.md", "w", encoding="utf-8").write(text.strip("\n") + "\n")'
 
 parse pypdfium2.txt "pypdfium2==5.15.2" '
 import pypdfium2
@@ -58,6 +64,13 @@ import asyncio
 from xberg import ExtractInput, extract
 out = asyncio.run(extract(ExtractInput(kind="uri", uri="referat.pdf")))
 open("parser-output/xberg.txt", "w", encoding="utf-8").write(out.results[0].content)'
+
+parse xberg-markdown.md "xberg==1.3.9" '
+import os, tempfile; os.environ["XDG_CACHE_HOME"] = tempfile.mkdtemp()
+import asyncio
+from xberg import ExtractInput, ExtractionConfig, extract
+out = asyncio.run(extract(ExtractInput(kind="uri", uri="referat.pdf"), ExtractionConfig(output_format="markdown")))
+open("parser-output/xberg-markdown.md", "w", encoding="utf-8").write(out.results[0].content)'
 
 parse markitdown.md "markitdown[pdf]==0.1.9" '
 from markitdown import MarkItDown
@@ -87,7 +100,7 @@ Svar med ét kort svar: $2
 
 --- TEKST ---
 $(cat "parser-output/$3")
---- SLUT ---" | tr '\n' ' ' | sed 's/|/\\|/g; s/ *$//' > "$tmp/svar.$1.$3"
+--- SLUT ---" | tr '\n' ' ' | sed 's/\*\*//g; s/|/\\|/g; s/ *$//' > "$tmp/svar.$1.$3"
 }
 judge() {  # NR SPØRGSMÅL FACIT FIL. Op til tre forsøg, hvis svaret hverken er ja eller nej (fx et fejlet kald).
   echo "?" > "$tmp/dom.$1.$4"
@@ -102,7 +115,9 @@ Er svaret rigtigt ifølge facit? Svaret må gerne sige mere end facit, men det e
     esac
   done
 }
-filer="docling.md pymupdf4llm.md liteparse.md pypdfium2.txt digpdf.html xberg.txt markitdown.md marker.md mineru.md"
+filer="docling.md pymupdf4llm.md liteparse.txt liteparse-markdown.md pypdfium2.txt digpdf.html xberg.txt xberg-markdown.md
+markitdown.md marker.md mineru.md"
+navn() { echo "${1%.*}" | sed 's/-markdown$/ (markdown)/'; }   # liteparse-markdown.md: liteparse (markdown)
 cat > "$tmp/q" <<'EOF'
 Hvor mange personer deltog i mødet?|4
 Hvem deltog? Skriv hvert navn for sig, adskilt af semikolon.|Anne Kjær Steen; Bjørn Thomsen; Patrick Enggaard; Marie Holm Lykke Jensen
@@ -146,13 +161,14 @@ Poster til Sprogteknologisk Konference 2026, 20. november, KU. Jakob Mørup Wang
 - `poster.pdf` er posteren.
 - `referat.pdf` er testdokumentet, et opdigtet mødereferat.
 - `parser-output/` er det, hver parser læser i `referat.pdf`.
-- `run.sh` kører parserne, stiller Haiku spørgsmålene og skriver denne README: `sh run.sh`. Det kræver
-  [uv](https://docs.astral.sh/uv/) og [Claude Code](https://claude.com/claude-code), og første kørsel henter modeller
-  på flere GB.
+- `run.sh` kører parserne, stiller Haiku spørgsmålene, lader Sonnet bedømme svarene og skriver denne README:
+  `sh run.sh`. Det kræver Linux, [uv](https://docs.astral.sh/uv/) og [Claude Code](https://claude.com/claude-code), og
+  første kørsel henter modeller på flere GB.
 
 ## Parserne
 
-Alle kører med deres standardindstillinger. LiteParse er bedt om markdown, som på posteren, og Docling, PyMuPDF4LLM og
+Alle kører med deres standardindstillinger. LiteParse og xberg giver ikke markdown som standard, så de er også kørt en
+gang, hvor de er bedt om markdown: rækkerne med (markdown). Sådan kørte LiteParse på posteren, og Docling, PyMuPDF4LLM og
 LiteParse er i de versioner, posteren brugte.
 EOF
   printf 'Tid er fra import til færdig tekst på én CPU-kerne (`taskset -c 0`) af en%s, med pakker og modeller hentet\npå forhånd. 1-9 er spørgsmålene herunder: ✅ er rigtigt og ❌ forkert eller ikke besvaret, bedømt af Sonnet ud fra facit.\nDe bedste resultater står med fed.\n\n' \
@@ -160,7 +176,7 @@ EOF
   echo "| Parser | Version | Tid | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | Rigtige |"
   echo "|---|---|---:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|---:|"
   while read -r t r f v d; do
-    printf '| [%s](parser-output/%s) | %s | %s %s | %s |\n' "${f%.*}" "$f" "$v" "$(fed $t $bt "$(tid $t)")" "$d" "$(fed $r $br "$r/9")"
+    printf '| [%s](parser-output/%s) | %s | %s %s | %s |\n' "$(navn $f)" "$f" "$v" "$(fed $t $bt "$(tid $t)")" "$d" "$(fed $r $br "$r/9")"
   done < "$tmp/rows"
   echo
   echo "## Haikus svar"
@@ -170,7 +186,7 @@ EOF
   while IFS='|' read -r q facit; do
     n=$((n + 1))
     printf '\n### %s. %s\n\nFacit: %s\n\n| Parser | Svar |\n|---|---|\n' "$n" "$q" "$facit"
-    for f in $filer; do printf '| %s | %s |\n' "${f%.*}" "$(cat "$tmp/svar.$n.$f")"; done
+    for f in $filer; do printf '| %s | %s |\n' "$(navn $f)" "$(cat "$tmp/svar.$n.$f")"; done
   done < "$tmp/q"
 } > README.md
 echo "README.md er skrevet."
